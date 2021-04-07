@@ -9,9 +9,10 @@ import initDb from '../../helpers/initDB'
 initDb()
 
 
-const stripe = Stripe(process.env.STRIPE_SECRET)
+const stripe = Stripe("sk_test_51IbcBiLfmfzEoMqTAobP7qKUjT5aXXflDhgCrYTZpUDsOwLrYMKVBPMfAvZPdKuLrgvh13y5e0SvURbX1d14hHsf00u9nSUgwE")
 export default async (req,res)=>{
-    const {Informações de Pagamento} = req.body
+    console.log(req.body)
+    const {Paymentinfo,email} = req.body
     const {authorization} = req.headers
     if(!authorization){
         return res.status(401).json({error:"you must logged in"})
@@ -19,20 +20,20 @@ export default async (req,res)=>{
    
     try{
           const {userId} = jwt.verify(authorization,process.env.JWT_SECRET)    
-          const cart = await Cart.findOne({user:userId}).populate("products.product")
+          const cart = await Cart.findOne({user:userId}).populate("Cart.products.product")
           let price  = 0
           cart.products.forEach(item=>{
             price = price + item.quantity * item.product.price
           })
           const prevCustomer = await stripe.customers.list({
-              email:Informações de Pagamento.email
+              email:email
           })
           const isExistingCustomer  = prevCustomer.data.length > 0
           let newCustomer
           if(!isExistingCustomer){
                newCustomer =  await stripe.customers.create({
-                  email:Informações de Pagamento.email,
-                  source:Informações de Pagamento.id
+                  email:email,
+                  source:Paymentinfo.id
               })
           }
 
@@ -40,16 +41,16 @@ export default async (req,res)=>{
               {
                   currency:"INR",
                   amount: price * 100,
-                  receipt_email:Informações de Pagamento.email,
+                  receipt_email:email,
                   customer: isExistingCustomer ? prevCustomer.data[0].id : newCustomer.id,
-                  description:`you purchased a product | ${Informações de Pagamento.email}`
+                  description:`you purchased a product | ${email}`
               },{
                 idempotencyKey:uuidV4()  
               }
           )
           await new Order({
               user:userId,
-              email:Informações de Pagamento.email,
+              email:email,
               total:price,
               products:cart.products
           }).save()
